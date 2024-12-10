@@ -1,0 +1,288 @@
+---
+title: "BatteryMaterials"
+author: "Michał Wrzesień"
+date: "2024-12-07"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+library(knitr)
+library(dplyr)
+library(ggplot2)
+library(corrplot)
+library(plotly)
+```
+
+## Wykorzystane biblioteki
+
+```{r bibl, echo=FALSE}
+packageDescription("knitr", fields = c("Package", "Version", "Description"))
+packageDescription("dplyr", fields = c("Package", "Version", "Description"))
+packageDescription("ggplot2", fields = c("Package", "Version", "Description"))
+packageDescription("corrplot", fields = c("Package", "Version", "Description"))
+packageDescription("plotly", fields = c("Package", "Version", "Description"))
+```
+
+## Executive summary
+
+Zbiór danych jest trochę za duży, żeby został przedstawiony zwłaszcza na wykresach czytelnie w całości, dlatego dalszą część analizy wykonano na próbce zbioru (od rozkładu wartości atrybutów).
+
+Zbiór ma 4 zmienne nominalne, z których tak naprawdę tylko jedna niesie ze sobą przydatne informacje (Working.Ion), a pozostałe mają za dużo unikalnych wartości, żeby niosły ze sobą przydatne informacje w wizualizacji danych (Battery.Formula, Formula.Charge, Formula.Discharge).
+
+W związku z tym powyższym, najczytelniej prezentuje się rozkład wartości głównego jonu. Najmniej zaś rozkłady wskaźników stabilności i maksymalnej różnicy między krokami napięcia przez sporą ilość wartości 0 w tych atrybutach.
+
+Do ustalenia korelacji między zmiennymi potrzebne było wcześniejsze zakodowanie zmiennych znakowych na numeryczne przy pomocy Label Encoding.
+
+## Wczytanie danych
+
+Nagłówek pierwszych 5 kolumn zbioru danych:
+
+```{r dane, echo=FALSE}
+data <- read.csv("mp_batteries.csv")
+head(select(data, 1:5))
+```
+
+## Brakujące wartości
+
+W zbiorze danych nie ma wartości NA lub NaN. Licznik brakujących wartości NA:
+
+```{r missval, echo=FALSE}
+sum(is.na(data))
+```
+
+Teoretycznie możnaby przyjąć wartości 0.0 za brakujące (stanowi większość wartości kolumn Atomic Fraction Charge i Max Voltage Step oraz pojedyncze wartości kolumn Stability Charge i Stability Discharge), ale jest to jednak jakaś wartość, więc załóżmy, że w zbiorze danych nie ma brakujących wartości.
+
+## Rozmiar zbioru i podstawowe statystyki
+
+Ilość wierszy i kolumn zbioru danych:   
+
+```{r rozm, echo=FALSE}
+dim(data)
+```
+
+Podstawowe statystyki:
+
+```{r podststat, echo=FALSE}
+summary(data)
+```
+
+## Powtarzalność eksperymentu
+
+Inicjacja ziarna i próbka 1000 elementów.
+
+```{r powt, echo=TRUE}
+set.seed(13)
+dsamp <- data[sample(nrow(data),1000),]
+```
+
+## Rozkłady wartości atrybutów
+
+Ilość unikalnych wartości w kolumnach:
+
+```{r rozkwart, echo=FALSE} 
+kolumny <- colnames(dsamp)
+for (k in kolumny){
+  cat(k, length(unique(dsamp[,k])), "\n")
+}
+```
+
+Histogramy pokazujące rozkład wartości dla atrybutów:
+
+```{r rozkwart2, echo=FALSE} 
+for (k in kolumny){
+  print(dsamp %>%
+    ggplot(aes_string(x = k)) +
+    geom_bar(color="cyan", fill=alpha("cyan", 0.3)) +
+    theme_bw() +
+    ggtitle(paste("Rozkład wartości ", k)) +
+    ylab("Ilość"))
+}
+```
+
+## Korelacja między zmiennymi
+
+```{r korel, echo=FALSE} 
+kor_data <- data.frame(dsamp)
+kor_data$Working.Ion <-  as.integer(factor(kor_data$Working.Ion))
+kor_data$Battery.ID <-  as.integer(factor(kor_data$Battery.ID))
+kor_data$Battery.Formula <-  as.integer(factor(kor_data$Battery.Formula))
+kor_data$Formula.Charge <-  as.integer(factor(kor_data$Formula.Charge))
+kor_data$Formula.Discharge <-  as.integer(factor(kor_data$Formula.Discharge))
+cor_data <- cor(kor_data)
+corrplot(cor_data, method="pie")
+```
+
+## Wykresy
+
+Wykresy przedstawiają zależności zmiennych, które ukazały znaczącą korelację (>=0.5), z wyróżnieniem głównego jonu odpowiadającego za transport ładunku w baterii.
+
+```{r wykr, echo=FALSE} 
+p <- ggplot(dsamp, aes(x=Max.Delta.Volume, y=Average.Voltage, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Max.Delta.Volume, y=Atomic.Fraction.Discharge, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Average.Voltage, y=Gravimetric.Energy, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Average.Voltage, y=Volumetric.Energy, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Gravimetric.Capacity, y=Max.Delta.Volume, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Gravimetric.Capacity, y=Volumetric.Capacity, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Gravimetric.Capacity, y=Atomic.Fraction.Discharge, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+
+p <- ggplot(dsamp, aes(x=Volumetric.Capacity, y=Atomic.Fraction.Discharge, color=factor(Working.Ion))) +
+geom_point() +
+geom_line() + 
+theme_bw()
+ggplotly(p)
+```
+
+## Trendy
+
+Z większości wykresów przebijają się najlepsze średnie osiągi uzyskane przez baterie z ładunkiem litowym, co wyjaśniałoby dominację tego pierwiastka w rozkładzie atrybutu Working.Ion. W niektórych przypadkach jak, np. pojemność czy gęstość energii na tle innych wybijają się również glin i magnez. Pojemnością wyróżniają się także baterie z cynkiem.  
+
+## Predykcja
+
+Predykcja przeprowadzona przy pomocy regresji liniowej. Oś X to zmienna mogąca indukować jakiś trend, a na jej podstawie na osi Y jest zmienna zależna, którą próbujemy przewidzieć. Pod wykresem podsumowanie modelu.
+
+Jeśli chodzi o ocenę parametrów modelu, to możemy zwrócić uwagę na trzy.
+
+1. P-value w sekcji Coefficients. Mała wartość oznacza, że zmienna stanowi dobry dodatek do modelu. Im większa wartość (do 1), tym większa szansa procentowa, że zmienna nie ma większego znaczenia dla regresji. Standardowy próg określający przydatność zmiennej to 0.05.
+
+2. Suma wartości w sekcji Residuals - im bliższa 0, tym lepsze dopasowanie linii do punktów na wykresie.
+
+3. Współczynnik determinacji R2 określa jak duża część zmienności atrybutu zależnego może być wyjaśniona przez atrybut niezależy. Przyjmuje wartości od 0 do 1. Im bliżej 1, tym większa determinacja.
+
+Dla zbadanych niżej kombinacji atrybutów wyróżniają się 3, chociaż żadna nie wykazuje wyjątkowo silnego związku między nimi. Warto zwrócić uwagę na predykcję Gravimetric.Energy przy pomocy Average.Voltage (R2 = 0.36), Volumetric Energy i Average.Voltage (R2 = 0.23) oraz Volumetric Energy i Volumetric Capacity (R2 = 0.1). Dla pozostałych kombinacji atrybutów wartość R2 nie zbliża się do 0.1.
+
+Należy tu podkreślić, że regresja liniowa zakłada z góry liniową zależność między zmiennymi. Nieznalezienie takiej wcale nie musi oznaczać, że między zmiennymi nie istnieje zależność innego typu.
+
+### Predykcja Gravimetric.Energy
+
+```{r pred, echo=FALSE} 
+model = lm(Gravimetric.Energy~Average.Voltage, data = dsamp)
+plot(dsamp$Average.Voltage, dsamp$Gravimetric.Energy, col = "blue")
+abline(model)
+summary(model)
+
+model = lm(Gravimetric.Energy~Max.Delta.Volume, data = dsamp)
+plot(dsamp$Max.Delta.Volume, dsamp$Gravimetric.Energy, col = "aquamarine")
+abline(model)
+summary(model)
+
+model = lm(Gravimetric.Energy~Gravimetric.Capacity, data = dsamp)
+plot(dsamp$Gravimetric.Capacity, dsamp$Gravimetric.Energy, col = "cadetblue")
+abline(model)
+summary(model)
+
+model = lm(Gravimetric.Energy~Volumetric.Capacity, data = dsamp)
+plot(dsamp$Volumetric.Capacity, dsamp$Gravimetric.Energy, col = "cadetblue1")
+abline(model)
+summary(model)
+```
+
+### Predykcja Volumetric.Energy
+
+```{r pred2, echo=FALSE} 
+model = lm(Volumetric.Energy~Average.Voltage, data = dsamp)
+plot(dsamp$Average.Voltage, dsamp$Volumetric.Energy, col = "green")
+abline(model)
+summary(model)
+
+model = lm(Volumetric.Energy~Max.Delta.Volume, data = dsamp)
+plot(dsamp$Max.Delta.Volume, dsamp$Volumetric.Energy, col = "darkgreen")
+abline(model)
+summary(model)
+
+model = lm(Volumetric.Energy~Gravimetric.Capacity, data = dsamp)
+plot(dsamp$Gravimetric.Capacity, dsamp$Volumetric.Energy, col = "darkkhaki")
+abline(model)
+summary(model)
+
+model = lm(Volumetric.Energy~Volumetric.Capacity, data = dsamp)
+plot(dsamp$Volumetric.Capacity, dsamp$Volumetric.Energy, col = "darkolivegreen1")
+abline(model)
+summary(model)
+```
+
+### Predykcja Stability.Charge
+
+```{r pred3, echo=FALSE} 
+model = lm(Stability.Charge~Average.Voltage, data = dsamp)
+plot(dsamp$Average.Voltage, dsamp$Stability.Charge, col = "red")
+abline(model)
+summary(model)
+
+model = lm(Stability.Charge~Max.Delta.Volume, data = dsamp)
+plot(dsamp$Max.Delta.Volume, dsamp$Stability.Charge, col = "maroon")
+abline(model)
+summary(model)
+
+model = lm(Stability.Charge~Gravimetric.Capacity, data = dsamp)
+plot(dsamp$Gravimetric.Capacity, dsamp$Stability.Charge, col = "magenta")
+abline(model)
+summary(model)
+
+model = lm(Stability.Charge~Volumetric.Capacity, data = dsamp)
+plot(dsamp$Volumetric.Capacity, dsamp$Stability.Charge, col = "plum2")
+abline(model)
+summary(model)
+```
+
+### Predykcja Stability.Discharge
+
+```{r pred4, echo=FALSE} 
+model = lm(Stability.Discharge~Average.Voltage, data = dsamp)
+plot(dsamp$Average.Voltage, dsamp$Stability.Discharge, col = "yellow")
+abline(model)
+summary(model)
+
+model = lm(Stability.Discharge~Max.Delta.Volume, data = dsamp)
+plot(dsamp$Max.Delta.Volume, dsamp$Stability.Discharge, col = "gold")
+abline(model)
+summary(model)
+
+model = lm(Stability.Discharge~Gravimetric.Capacity, data = dsamp)
+plot(dsamp$Gravimetric.Capacity, dsamp$Stability.Discharge, col = "orange")
+abline(model)
+summary(model)
+
+model = lm(Stability.Discharge~Volumetric.Capacity, data = dsamp)
+plot(dsamp$Volumetric.Capacity, dsamp$Stability.Discharge, col = "khaki")
+abline(model)
+summary(model)
+```
+
